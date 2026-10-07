@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Bala Mod Panel</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; user-select:none; font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background:#0b0c10; color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; padding:15px; overflow:hidden; }
+
+        /* কাস্টম ডায়ালগ বক্স (পপ-আপ) */
+        .custom-dialog-bg { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); display:none; align-items:center; justify-content:center; z-index:99999; }
+        .custom-dialog { background:#141720; border:1px solid #232a39; border-radius:18px; width:88%; max-width:340px; padding:22px; text-align:center; box-shadow:0 15px 35px rgba(0,0,0,0.8); animation:pop 0.3s ease; }
+        .dialog-logo { width:65px; height:65px; border-radius:50%; border:2px solid #ff6a00; object-fit:cover; margin-bottom:12px; }
+        .dialog-title { color:#ff6a00; font-size:16px; font-weight:800; text-transform:uppercase; margin-bottom:6px; }
+        .dialog-msg { color:#a3adbd; font-size:13px; line-height:1.5; margin-bottom:18px; }
+        .dialog-btn { width:100%; background:#ff6a00; color:#000; border:none; border-radius:10px; padding:12px; font-weight:800; font-size:13px; text-transform:uppercase; cursor:pointer; }
+
+        /* Login Card */
+        .login-card { width:100%; max-width:380px; background:#121418; border:1px solid #1f232b; border-radius:20px; padding:30px 24px; box-shadow:0 10px 30px rgba(0,0,0,0.7); display:flex; flex-direction:column; align-items:center; animation:pop 0.4s ease; }
+        .login-card.hide-anim { animation:fadeOut 0.4s forwards; }
+        .login-title { color:#ff6a00; font-size:22px; font-weight:800; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:4px; }
+        .login-sub { color:#7a828e; font-size:11px; font-weight:600; letter-spacing:3px; text-transform:uppercase; margin-bottom:20px; }
+        .login-divider { width:100%; height:1px; background:#1e222a; margin-bottom:24px; }
+        .input-group { width:100%; display:flex; flex-direction:column; gap:8px; margin-bottom:20px; }
+        .input-label { color:#606877; font-size:11px; font-weight:700; letter-spacing:1.5px; }
+        .input-box { width:100%; background:#16181f; border:1.5px solid #232733; border-radius:12px; padding:14px; color:#fff; font-size:14px; outline:none; }
+        .btn-activate { width:100%; background:linear-gradient(180deg, #ff7b00 0%, #e65c00 100%); border:none; border-radius:12px; padding:15px; color:#0d0d0d; font-size:15px; font-weight:800; letter-spacing:1.5px; cursor:pointer; margin-bottom:22px; }
+
+        /* Dashboard */
+        .dashboard-container { display:none; flex-direction:column; align-items:center; width:100%; }
+        .dashboard-container.show-anim { display:flex; animation:pop 0.4s ease; }
+        .logo-circle { width:110px; height:110px; border-radius:50%; border:3px solid #ff6a00; display:flex; align-items:center; justify-content:center; background:#141414; margin-bottom:22px; }
+        .logo-circle.active { box-shadow:0 0 30px rgba(255,106,0,0.7); }
+        .target-icon { width:60px; height:60px; border:3.5px solid #fff; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+        .target-inner { width:32px; height:32px; border:3.5px solid #fff; border-radius:50%; display:flex; align-items:center; justify-content:center; }
+        .target-dot { width:10px; height:10px; background:#fff; border-radius:50%; }
+        .dash-title { color:#ff6a00; font-size:26px; font-weight:900; letter-spacing:2.5px; text-transform:uppercase; margin-bottom:4px; }
+        .dash-subtitle-pro { color:#fff; font-size:14px; font-weight:bold; letter-spacing:6px; margin-bottom:15px; }
+        .expiry-text { color:#26e07f; font-size:13px; font-weight:600; font-family:monospace; margin-bottom:30px; }
+        
+        .toggle-btn { width:85px; height:85px; background:#1a1a1a; border:2px solid #2b2b2b; border-radius:22px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:0.3s; }
+        .btn-icon { width:0; height:0; border-top:13px solid transparent; border-bottom:13px solid transparent; border-left:22px solid #ff6a00; margin-left:4px; transition:0.3s; }
+        .toggle-btn.active { background:#ff6a00; box-shadow:0 0 25px rgba(255,106,0,0.6); }
+        .toggle-btn.active .btn-icon { width:20px; height:20px; border:none; background:#fff; border-radius:4px; margin:0; }
+        .action-label { color:#555; font-size:11px; font-weight:bold; letter-spacing:2px; margin-top:14px; text-transform:uppercase; }
+        .action-label.active { color:#26e07f; }
+
+        @keyframes pop { 0%{opacity:0; transform:scale(0.88);} 100%{opacity:1; transform:scale(1);} }
+        @keyframes fadeOut { 100%{opacity:0; transform:scale(0.88);} }
+    </style>
+</head>
+<body>
+
+    <!-- কাস্টম ডায়ালগ এলিমেন্ট -->
+    <div class="custom-dialog-bg" id="dialogBg">
+        <div class="custom-dialog">
+            <img class="dialog-logo" id="dlgLogo" src="https://i.ibb.co/vz6V02r/logo.png" alt="logo">
+            <div class="dialog-title" id="dlgTitle">BALA MOD SAFE PRO</div>
+            <div class="dialog-msg" id="dlgMsg">Alert description</div>
+            <button class="dialog-btn" id="dlgBtn" onclick="closeDialog()">OK</button>
+        </div>
+    </div>
+
+    <!-- লগইন কার্ড -->
+    <div class="login-card" id="loginCard">
+        <div class="login-title" id="brandTitle">BALA MOD V5</div>
+        <div class="login-sub">PREMIUM ACTIVATION</div>
+        <div class="login-divider"></div>
+        <div class="input-group">
+            <label class="input-label">ACTIVATION KEY</label>
+            <input type="text" class="input-box" id="keyInput" placeholder="Enter activation key" autocomplete="off">
+        </div>
+        <button class="btn-activate" onclick="handleLogin()">ACTIVATE</button>
+    </div>
+
+    <!-- ড্যাশবোর্ড -->
+    <div class="dashboard-container" id="dashContainer">
+        <div class="logo-circle" id="logo"><div class="target-icon"><div class="target-inner"><div class="target-dot"></div></div></div></div>
+        <div class="dash-title" id="dashBrandTitle">BALA MOD SAFE</div>
+        <div class="dash-subtitle-pro">PRO</div>
+        <div class="expiry-text" id="expiryLabel">Key expires: Calculating...</div>
+        <div class="toggle-btn" id="mainBtn" onclick="toggleState()"><div class="btn-icon"></div></div>
+        <div class="action-label" id="actionText">TAP TO ACTIVATE</div>
+    </div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDrPVWqRp0moKnNJlXlry9-4LX2fzY5vh0",
+            databaseURL: "https://bala-mod-1042c-default-rtdb.firebaseio.com",
+            projectId: "bala-mod-1042c",
+            storageBucket: "bala-mod-1042c.firebasestorage.app",
+            messagingSenderId: "584950167269",
+            appId: "1:584950167269:android:a0b3f4c7366ab49269860c"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let brandLogoUrl = "https://i.ibb.co/vz6V02r/logo.png";
+        let brandName = "BALA MOD SAFE PRO";
+        let targetActionUrl = "";
+
+        // ব্র্যান্ড সিঙ্ক
+        db.ref('brandSettings').on('value', s => {
+            const v = s.val();
+            if(v) {
+                if(v.name) { brandName = v.name; document.getElementById('brandTitle').innerText = v.name; }
+                if(v.logo) { brandLogoUrl = v.logo; }
+            }
+        });
+
+        // অ্যাকশন লিংক সিঙ্ক
+        db.ref('actionLink').on('value', s => { targetActionUrl = s.val() || ""; });
+
+        // ইউনিভার্সাল কাস্টম ডায়ালগ শো ফাংশন
+        let dialogCallback = null;
+        function showCustomAlert(msg, title, btnText, callback) {
+            document.getElementById('dlgLogo').src = brandLogoUrl;
+            document.getElementById('dlgTitle').innerText = title || brandName;
+            document.getElementById('dlgMsg').innerText = msg;
+            document.getElementById('dlgBtn').innerText = btnText || "OK";
+            dialogCallback = callback || null;
+            document.getElementById('dialogBg').style.display = 'flex';
+        }
+        function closeDialog() {
+            document.getElementById('dialogBg').style.display = 'none';
+            if(dialogCallback) { dialogCallback(); dialogCallback = null; }
+        }
+
+        // ডিভাইস আইডি
+        let deviceId = localStorage.getItem("bala_dev_id");
+        if(!deviceId) {
+            deviceId = "DEV-" + Math.random().toString(36).substring(2, 9).toUpperCase();
+            localStorage.setItem("bala_dev_id", deviceId);
+        }
+
+        // নোটিফিকেশন চেক (কাস্টম ডায়ালগে দেখাবে)
+        db.ref('notifications').limitToLast(1).on('child_added', snap => {
+            const n = snap.val();
+            showCustomAlert(n.msg, "📢 " + n.title);
+        });
+
+        let countdownTimer = null;
+
+        function handleLogin() {
+            const key = document.getElementById("keyInput").value.trim();
+            if(!key) return showCustomAlert("Please enter your activation key!", "KEY REQUIRED");
+
+            db.ref('keys/' + key).once('value').then(snap => {
+                if(!snap.exists()) return showCustomAlert("The key entered is invalid or expired!", "ACCESS DENIED");
+                const data = snap.val();
+
+                // সিঙ্গেল ডিভাইস চেক
+                if(data.deviceType === 'single') {
+                    if(data.registeredDevice && data.registeredDevice !== deviceId) {
+                        return showCustomAlert("This key is already bound to another phone!", "DEVICE MISMATCH");
+                    }
+                    if(!data.registeredDevice) {
+                        db.ref('keys/' + key).update({ registeredDevice: deviceId });
+                    }
+                }
+
+                // ইউজার প্রথমবার লগইন করলে সেই মুহূর্ত থেকে সময় গণনা শুরু হবে
+                const now = Date.now();
+                let actAt = data.activatedAt;
+                if(!actAt || actAt === 0) {
+                    actAt = now;
+                    db.ref('keys/' + key).update({ activatedAt: now });
+                }
+
+                if(data.durationUnit === 'permanent') {
+                    openDashboard("Lifetime VIP Active");
+                } else {
+                    let totalMs = 0;
+                    if(data.durationUnit === 'minutes') totalMs = data.durationVal * 60 * 1000;
+                    else if(data.durationUnit === 'hours') totalMs = data.durationVal * 3600 * 1000;
+                    else if(data.durationUnit === 'days') totalMs = data.durationVal * 86400 * 1000;
+
+                    const expireAt = actAt + totalMs;
+                    if(now >= expireAt) {
+                        db.ref('keys/' + key).remove();
+                        return showCustomAlert("Your license validity has expired!", "EXPIRED");
+                    }
+
+                    // লাইভ টাইমার
+                    startCountdown(key, expireAt);
+                    openDashboard();
+                }
+            });
+        }
+
+        function startCountdown(key, expireAt) {
+            function update() {
+                const rem = expireAt - Date.now();
+                if(rem <= 0) {
+                    clearInterval(countdownTimer);
+                    db.ref('keys/' + key).remove();
+                    showCustomAlert("License expired! Please re-login with a new key.", "EXPIRED", "RELOAD", () => {
+                        window.location.reload();
+                    });
+                    return;
+                }
+                const h = Math.floor(rem / 3600000);
+                const m = Math.floor((rem % 3600000) / 60000);
+                const s = Math.floor((rem % 60000) / 1000);
+                document.getElementById('expiryLabel').innerText = `Key expires: ${h}h ${m}m ${s}s`;
+            }
+            update();
+            countdownTimer = setInterval(update, 1000);
+        }
+
+        function openDashboard(customTxt) {
+            document.getElementById('loginCard').classList.add('hide-anim');
+            setTimeout(() => {
+                document.getElementById('loginCard').style.display = 'none';
+                document.getElementById('dashContainer').classList.add('show-anim');
+                if(customTxt) document.getElementById('expiryLabel').innerText = customTxt;
+            }, 380);
+        }
+
+        // বালামোড অন/অফ এবং স্কেচওয়্যার MoreBlock কল
+        let isActivated = false;
+        function toggleState() {
+            isActivated = !isActivated;
+            const btn = document.getElementById("mainBtn");
+            const label = document.getElementById("actionText");
+            const logo = document.getElementById("logo");
+
+            btn.classList.toggle("active", isActivated);
+            logo.classList.toggle("active", isActivated);
+            label.classList.toggle("active", isActivated);
+
+            if(isActivated) {
+                label.innerText = "ACTIVATED (TAP TO STOP)";
+
+                // ১. স্কেচওয়্যারে BALAMODE মোড় ব্লক কল
+                if(window.Android && window.Android.triggerBalaMode) {
+                    window.Android.triggerBalaMode("ON");
+                }
+
+                // ২. এডমিন থেকে দেওয়া লিংক ওপেন করা
+                if(targetActionUrl) {
+                    if(window.Android && window.Android.openTargetLink) {
+                        window.Android.openTargetLink(targetActionUrl);
+                    } else {
+                        window.open(targetActionUrl, "_blank");
+                    }
+                }
+            } else {
+                label.innerText = "TAP TO ACTIVATE";
+                if(window.Android && window.Android.triggerBalaMode) {
+                    window.Android.triggerBalaMode("OFF");
+                }
+            }
+        }
+    </script>
+</body>
+</html>
